@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import CreateResumeDialog from "./create-resume-dialog";
 import { CREATE_RESUME_EVENT } from "./sidebar";
 
 const tabs = [
@@ -24,11 +25,9 @@ type Sort = "created" | "name";
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
-const untitledResume = (): Doc => ({ id: newId(), name: "Untitled resume", created: Date.now() });
-
-function initialSections(withNewResume: boolean): Record<TabId, Section[]> {
+function initialSections(): Record<TabId, Section[]> {
   return {
-    resumes: [{ id: "resumes", name: "Resumes", docs: withNewResume ? [untitledResume()] : [] }],
+    resumes: [{ id: "resumes", name: "Resumes", docs: [] }],
     cover: [{ id: "cover", name: "Cover Letters", docs: [] }],
     resignation: [{ id: "resignation", name: "Resignation Letters", docs: [] }],
   };
@@ -42,7 +41,11 @@ export default function Dashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>("resumes");
-  const [sections, setSections] = useState(() => initialSections(searchParams.get("new") === "resume"));
+  const [sections, setSections] = useState(initialSections);
+  // Section the Create a resume dialog will add to; null when the dialog is closed.
+  const [createIn, setCreateIn] = useState<string | null>(() =>
+    searchParams.get("new") === "resume" ? "resumes" : null,
+  );
   const [view, setView] = useState<"grid" | "list">("grid");
   const [sort, setSort] = useState<Sort>("created");
   const [sortOpen, setSortOpen] = useState(false);
@@ -70,10 +73,7 @@ export default function Dashboard() {
   useEffect(() => {
     function onCreate() {
       setTab("resumes");
-      setSections((prev) => ({
-        ...prev,
-        resumes: prev.resumes.map((s, i) => (i === 0 ? { ...s, docs: [...s.docs, untitledResume()] } : s)),
-      }));
+      setCreateIn("resumes");
     }
     window.addEventListener(CREATE_RESUME_EVENT, onCreate);
     return () => window.removeEventListener(CREATE_RESUME_EVENT, onCreate);
@@ -202,7 +202,9 @@ export default function Dashboard() {
               <CreateCard
                 view={view}
                 label={`Create new ${current.singular}`}
-                onCreate={() => addDocs(section.id, [`Untitled ${current.singular}`])}
+                onCreate={() =>
+                  tab === "resumes" ? setCreateIn(section.id) : addDocs(section.id, [`Untitled ${current.singular}`])
+                }
                 onDrop={(names) => addDocs(section.id, names)}
               />
               {sorted(section.docs).map((doc) =>
@@ -271,6 +273,16 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+
+      {createIn && (
+        <CreateResumeDialog
+          onClose={() => setCreateIn(null)}
+          onCreate={(name) => {
+            addDocs(createIn, [name]);
+            setCreateIn(null);
+          }}
+        />
+      )}
     </div>
   );
 }
