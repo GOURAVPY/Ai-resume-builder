@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import CreateResumeDialog from "./create-resume-dialog";
+import { useCallback, useEffect, useState } from "react";
+import { api, importFile } from "@/lib/api";
+import type { DocSummary, DocType, Section } from "@/lib/documents";
+import CreateResumeDialog, { type NewResumeOptions } from "./create-resume-dialog";
 import { CREATE_RESUME_EVENT } from "./sidebar";
 
 const tabs = [
-  { id: "resumes", label: "Resumes", singular: "resume", icon: "description" },
+  { id: "resume", label: "Resumes", singular: "resume", icon: "description" },
   { id: "cover", label: "Cover Letters", singular: "cover letter", icon: "mail" },
   { id: "resignation", label: "Resignation Letters", singular: "resignation letter", icon: "logout" },
-] as const;
-type TabId = (typeof tabs)[number]["id"];
+] as const satisfies readonly { id: DocType; label: string; singular: string; icon: string }[];
 
 const featureCards = [
   { href: "/dashboard/ai-agent", icon: "auto_awesome", title: "AI Resume Agent", text: "Our most powerful AI resume tool" },
@@ -19,19 +20,7 @@ const featureCards = [
   { href: "/dashboard/ai-interview", icon: "video_chat", title: "AI Interview", text: "Practice interviews with instant feedback" },
 ];
 
-type Doc = { id: string; name: string; created: number };
-type Section = { id: string; name: string; docs: Doc[] };
 type Sort = "created" | "name";
-
-const newId = () => Math.random().toString(36).slice(2, 10);
-
-function initialSections(): Record<TabId, Section[]> {
-  return {
-    resumes: [{ id: "resumes", name: "Resumes", docs: [] }],
-    cover: [{ id: "cover", name: "Cover Letters", docs: [] }],
-    resignation: [{ id: "resignation", name: "Resignation Letters", docs: [] }],
-  };
-}
 
 function formatDate(ms: number) {
   return new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -40,29 +29,39 @@ function formatDate(ms: number) {
 export default function Dashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<TabId>("resumes");
-  const [sections, setSections] = useState(initialSections);
-  // Section the Create a resume dialog will add to; null when the dialog is closed.
-  const [createIn, setCreateIn] = useState<string | null>(() =>
-    searchParams.get("new") === "resume" ? "resumes" : null,
-  );
+  const [tab, setTab] = useState<DocType>("resume");
+  const [docs, setDocs] = useState<DocSummary[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  // Section the Create a resume dialog will add to ("" = the main section); null when closed.
+  const [createIn, setCreateIn] = useState<string | null>(() => (searchParams.get("new") === "resume" ? "" : null));
   const [view, setView] = useState<"grid" | "list">("grid");
   const [sort, setSort] = useState<Sort>("created");
   const [sortOpen, setSortOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const current = tabs.find((t) => t.id === tab)!;
 
-  function addDocs(sectionId: string, names: string[]) {
-    setSections((prev) => ({
-      ...prev,
-      [tab]: prev[tab].map((s) =>
-        s.id === sectionId
-          ? { ...s, docs: [...s.docs, ...names.map((name) => ({ id: newId(), name, created: Date.now() }))] }
-          : s,
-      ),
-    }));
-  }
+  const load = useCallback(async (type: DocType) => {
+    setLoading(true);
+    try {
+      const res = await api<{ documents: DocSummary[]; sections: Section[] }>(`/api/documents?type=${type}`);
+      setDocs(res.documents);
+      setSections(res.sections);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't load your documents.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading data for the selected tab
+    void load(tab);
+  }, [tab, load]);
 
   // The sidebar's "Create new resume" button arrives as ?new=resume from other pages
   // (handled in the initial state above) or as an event while this page is open.
@@ -72,22 +71,60 @@ export default function Dashboard() {
 
   useEffect(() => {
     function onCreate() {
-      setTab("resumes");
-      setCreateIn("resumes");
+      setTab("resume");
+      setCreateIn("");
     }
     window.addEventListener(CREATE_RESUME_EVENT, onCreate);
     return () => window.removeEventListener(CREATE_RESUME_EVENT, onCreate);
   }, []);
 
-  function addSection() {
-    const name = newSectionName?.trim();
-    if (name) setSections((prev) => ({ ...prev, [tab]: [...prev[tab], { id: newId(), name, docs: [] }] }));
-    setNewSectionName(null);
+  async function createDoc(type: DocType, sectionId: string, name: string, data?: object) {
+    const { document } = await api<{ document: DocSummary }>("/api/documents", {
+      method: "POST",
+      json: { type, name, sectionId: sectionId || null, data },
+    });
+    router.push(`/dashboard/documents/${document.id}`);
   }
 
-  function sorted(docs: Doc[]) {
-    return [...docs].sort((a, b) => (sort === "created" ? b.created - a.created : a.name.localeCompare(b.name)));
+  async function createResume(options: NewResumeOptions) {
+    const extra = { experienceLevel: options.experienceLevel, language: options.language, targetJob: options.targetJob };
+    const imported = options.file ? await importFile(options.file, "resume") : undefined;
+    await createDoc("resume", createIn ?? "", options.name, { ...imported?.data, ...extra });
   }
+
+  async function onDropFiles(sectionId: string, files: File[]) {
+    setBusy(true);
+    try {
+      const imported = await importFile(files[0], tab);
+      await createDoc(tab, sectionId, imported.name, imported.data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't import that file.");
+      setBusy(false);
+    }
+  }
+
+  async function deleteDoc(doc: DocSummary) {
+    if (!window.confirm(`Delete "${doc.name}"? This can't be undone.`)) return;
+    await api(`/api/documents/${doc.id}`, { method: "DELETE" });
+    setDocs((d) => d.filter((x) => x.id !== doc.id));
+  }
+
+  async function addSection() {
+    const name = newSectionName?.trim();
+    setNewSectionName(null);
+    if (!name) return;
+    const { section } = await api<{ section: Section }>("/api/sections", { method: "POST", json: { type: tab, name } });
+    setSections((s) => [...s, section]);
+  }
+
+  function sorted(list: DocSummary[]) {
+    return [...list].sort((a, b) => (sort === "created" ? b.createdAt - a.createdAt : a.name.localeCompare(b.name)));
+  }
+
+  const allSections = [{ id: "", name: current.label }, ...sections];
+  const knownSectionIds = new Set(sections.map((s) => s.id));
+  const docsIn = (sectionId: string) =>
+    sorted(docs.filter((d) => (sectionId ? d.sectionId === sectionId : !d.sectionId || !knownSectionIds.has(d.sectionId))));
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -133,9 +170,15 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <section className="mt-6 rounded-3xl bg-surface-container-low p-4 sm:p-6">
-        {sections[tab].map((section, i) => (
-          <div key={section.id} className={i > 0 ? "mt-10" : ""}>
+      {error && (
+        <p role="alert" className="mt-6 rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
+          {error}
+        </p>
+      )}
+
+      <section className="mt-6 rounded-3xl bg-surface-container-low p-4 sm:p-6" aria-busy={loading || busy}>
+        {allSections.map((section, i) => (
+          <div key={section.id || "main"} className={i > 0 ? "mt-10" : ""}>
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="mr-auto text-[22px] text-on-surface">{section.name}</h2>
               {i === 0 && (
@@ -201,34 +244,21 @@ export default function Dashboard() {
             >
               <CreateCard
                 view={view}
+                busy={busy}
                 label={`Create new ${current.singular}`}
                 onCreate={() =>
-                  tab === "resumes" ? setCreateIn(section.id) : addDocs(section.id, [`Untitled ${current.singular}`])
+                  tab === "resume"
+                    ? setCreateIn(section.id)
+                    : createDoc(tab, section.id, `Untitled ${current.singular}`).catch((e) => setError(e.message))
                 }
-                onDrop={(names) => addDocs(section.id, names)}
+                onDrop={(files) => onDropFiles(section.id, files)}
               />
-              {sorted(section.docs).map((doc) =>
-                view === "grid" ? (
-                  <div key={doc.id} className="flex aspect-[3/4] flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface">
-                    <div className="flex-1 space-y-2 p-4">
-                      <div className="h-2 w-1/2 rounded bg-on-surface/20" />
-                      <div className="h-1.5 w-full rounded bg-on-surface/10" />
-                      <div className="h-1.5 w-5/6 rounded bg-on-surface/10" />
-                      <div className="h-1.5 w-2/3 rounded bg-on-surface/10" />
-                    </div>
-                    <div className="border-t border-outline-variant px-3 py-2">
-                      <p className="truncate text-sm font-medium text-on-surface">{doc.name}</p>
-                      <p className="text-xs text-on-surface-variant">{formatDate(doc.created)}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={doc.id} className="flex h-16 items-center gap-4 rounded-xl bg-surface px-4">
-                    <span className="icon text-on-surface-variant">{current.icon}</span>
-                    <p className="flex-1 truncate text-sm font-medium text-on-surface">{doc.name}</p>
-                    <p className="text-xs text-on-surface-variant">{formatDate(doc.created)}</p>
-                  </div>
-                ),
+              {loading && i === 0 && docs.length === 0 && (
+                <div className={`animate-pulse rounded-xl bg-surface-container ${view === "grid" ? "aspect-[3/4]" : "h-16"}`} />
               )}
+              {docsIn(section.id).map((doc) => (
+                <DocCard key={doc.id} doc={doc} view={view} icon={current.icon} onDelete={() => deleteDoc(doc)} />
+              ))}
             </div>
           </div>
         ))}
@@ -247,7 +277,7 @@ export default function Dashboard() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                addSection();
+                void addSection();
               }}
               className="flex flex-wrap items-center gap-2"
             >
@@ -274,34 +304,81 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {createIn && (
-        <CreateResumeDialog
-          onClose={() => setCreateIn(null)}
-          onCreate={(name) => {
-            addDocs(createIn, [name]);
-            setCreateIn(null);
-          }}
-        />
-      )}
+      {createIn !== null && <CreateResumeDialog onClose={() => setCreateIn(null)} onCreate={createResume} />}
+    </div>
+  );
+}
+
+function DocCard({
+  doc,
+  view,
+  icon,
+  onDelete,
+}: {
+  doc: DocSummary;
+  view: "grid" | "list";
+  icon: string;
+  onDelete: () => void;
+}) {
+  const deleteButton = (
+    <button
+      type="button"
+      aria-label={`Delete ${doc.name}`}
+      onClick={onDelete}
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-on-surface-variant opacity-0 transition-opacity hover:bg-on-surface/8 focus:opacity-100 group-hover:opacity-100"
+    >
+      <span className="icon text-[20px]">delete</span>
+    </button>
+  );
+  if (view === "list") {
+    return (
+      <div className="group flex h-16 items-center gap-4 rounded-xl bg-surface px-4">
+        <span className="icon text-on-surface-variant">{icon}</span>
+        <Link href={`/dashboard/documents/${doc.id}`} className="flex-1 truncate text-sm font-medium text-on-surface hover:underline">
+          {doc.name}
+        </Link>
+        <p className="text-xs text-on-surface-variant">{formatDate(doc.updatedAt)}</p>
+        {deleteButton}
+      </div>
+    );
+  }
+  return (
+    <div className="group relative flex aspect-[3/4] flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface transition-shadow hover:shadow-md">
+      <Link href={`/dashboard/documents/${doc.id}`} className="flex flex-1 flex-col">
+        <span className="flex-1 space-y-2 p-4">
+          <span className="block h-2 w-1/2 rounded bg-on-surface/20" />
+          <span className="block h-1.5 w-full rounded bg-on-surface/10" />
+          <span className="block h-1.5 w-5/6 rounded bg-on-surface/10" />
+          <span className="block h-1.5 w-2/3 rounded bg-on-surface/10" />
+        </span>
+        <span className="block border-t border-outline-variant px-3 py-2">
+          <span className="block truncate text-sm font-medium text-on-surface">{doc.name}</span>
+          <span className="block text-xs text-on-surface-variant">Edited {formatDate(doc.updatedAt)}</span>
+        </span>
+      </Link>
+      <div className="absolute right-1 top-1">{deleteButton}</div>
     </div>
   );
 }
 
 function CreateCard({
   view,
+  busy,
   label,
   onCreate,
   onDrop,
 }: {
   view: "grid" | "list";
+  busy: boolean;
   label: string;
   onCreate: () => void;
-  onDrop: (names: string[]) => void;
+  onDrop: (files: File[]) => void;
 }) {
   const [dragging, setDragging] = useState(false);
   return (
     <button
       type="button"
+      disabled={busy}
       onClick={onCreate}
       onDragOver={(e) => {
         e.preventDefault();
@@ -311,23 +388,19 @@ function CreateCard({
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
-        const names = [...e.dataTransfer.files].map((f) => f.name.replace(/\.[^.]+$/, ""));
-        if (names.length) onDrop(names);
+        const files = [...e.dataTransfer.files];
+        if (files.length) onDrop(files);
       }}
-      className={`flex items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors ${
+      className={`flex items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors disabled:opacity-60 ${
         view === "grid" ? "aspect-[3/4] flex-col p-4" : "h-16 px-4"
-      } ${
-        dragging
-          ? "border-primary bg-primary-container/60"
-          : "border-outline-variant hover:border-primary hover:bg-primary/8"
-      }`}
+      } ${dragging ? "border-primary bg-primary-container/60" : "border-outline-variant hover:border-primary hover:bg-primary/8"}`}
     >
       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-container text-on-primary-container">
-        <span className="icon">add</span>
+        <span className="icon">{busy ? "hourglass_top" : "add"}</span>
       </span>
       <span>
-        <span className="block text-sm font-medium text-on-surface">{label}</span>
-        <span className="block text-xs text-on-surface-variant">or drop a file here</span>
+        <span className="block text-sm font-medium text-on-surface">{busy ? "Importing…" : label}</span>
+        <span className="block text-xs text-on-surface-variant">or drop a PDF or DOCX here</span>
       </span>
     </button>
   );

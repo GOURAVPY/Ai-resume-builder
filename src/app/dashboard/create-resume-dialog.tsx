@@ -4,6 +4,14 @@ import { useState } from "react";
 import { Button, ButtonLink, FileField, Icon, Select, Switch, TextField } from "@/components/m3";
 
 const experienceLevels = ["Student / Intern", "Entry level (0–2 years)", "Mid level (3–5 years)", "Senior (6–10 years)", "Executive (10+ years)"];
+export type NewResumeOptions = {
+  name: string;
+  experienceLevel: string;
+  language: string;
+  targetJob: string;
+  file?: File;
+};
+
 const languages = ["English", "Hindi", "Spanish", "French", "German", "Japanese"];
 
 export default function CreateResumeDialog({
@@ -11,11 +19,13 @@ export default function CreateResumeDialog({
   onCreate,
 }: {
   onClose: () => void;
-  onCreate: (name: string) => void;
+  onCreate: (options: NewResumeOptions) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [experience, setExperience] = useState("");
-  const [file, setFile] = useState<string>();
+  const [file, setFile] = useState<File>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [showImport, setShowImport] = useState(true);
   const [showLanguage, setShowLanguage] = useState(false);
   const [language, setLanguage] = useState("English");
@@ -62,7 +72,7 @@ export default function CreateResumeDialog({
             </button>
             {showImport && (
               <div className="mt-3">
-                <FileField fileName={file} onFile={(f) => setFile(f.name)} />
+                <FileField fileName={file?.name} onFile={setFile} />
               </div>
             )}
           </div>
@@ -106,6 +116,11 @@ export default function CreateResumeDialog({
           </div>
         </div>
 
+        {error && (
+          <p role="alert" className="mx-6 mt-3 rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
+            {error}
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-4">
           <Button variant="text" onClick={onClose} className="mr-auto">
             Cancel
@@ -113,8 +128,26 @@ export default function CreateResumeDialog({
           <ButtonLink href="/dashboard/ai-agent" variant="outlined" icon="auto_awesome">
             Use AI Resume Agent
           </ButtonLink>
-          <Button disabled={!name.trim()} onClick={() => onCreate(name.trim())}>
-            Create resume
+          <Button
+            disabled={!name.trim() || busy}
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                await onCreate({
+                  name: name.trim(),
+                  experienceLevel: experience,
+                  language,
+                  targetJob: targeted ? jobDescription.trim() : "",
+                  file,
+                });
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Couldn't create the resume.");
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? (file ? "Importing…" : "Creating…") : "Create resume"}
           </Button>
         </div>
       </div>
