@@ -120,7 +120,7 @@ export default function LoginForm() {
 
         <button
           type="submit"
-          className="h-12 w-full rounded-full bg-primary text-sm font-medium tracking-[0.1px] text-on-primary transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 active:shadow-none"
+          className="h-14 w-full rounded-full bg-primary text-base font-medium text-on-primary transition-[border-radius,box-shadow] duration-150 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 active:rounded-xl active:shadow-none"
         >
           Sign in
         </button>
@@ -134,7 +134,7 @@ export default function LoginForm() {
 
       <button
         type="button"
-        className="flex h-12 w-full items-center justify-center gap-3 rounded-full border border-outline text-sm font-medium text-primary transition-colors hover:bg-primary/8"
+        className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-outline-variant text-base font-medium text-on-surface-variant transition-[border-radius,background-color] duration-150 hover:bg-on-surface-variant/8 active:rounded-xl"
       >
         <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
