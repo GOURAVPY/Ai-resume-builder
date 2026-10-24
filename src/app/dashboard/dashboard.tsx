@@ -112,7 +112,7 @@ export default function Dashboard() {
         })}
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="mt-6 grid gap-4 xl:grid-cols-3">
         {featureCards.map((c) => (
           <Link
             key={c.href}
