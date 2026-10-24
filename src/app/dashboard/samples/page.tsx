@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Chip, Icon, Segmented, TextField } from "@/components/m3";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Button, Chip, Icon, Segmented, TextField } from "@/components/m3";
+import { api } from "@/lib/api";
 
 const categories = ["Pro", "Business", "Programming", "Engineering", "Marketing", "Design", "Student", "Medical", "Finance", "Education", "Legal", "Other"];
 
@@ -29,6 +31,22 @@ export default function SamplesPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>();
   const [saved, setSaved] = useState<Set<string>>(new Set());
+  const router = useRouter();
+
+  useEffect(() => {
+    api<{ saved: string[] }>("/api/samples")
+      .then((r) => setSaved(new Set(r.saved)))
+      .catch(() => {});
+  }, []);
+
+  // Starts a new resume for this role and opens the editor, where AI can fill it in.
+  async function startFromSample(role: string) {
+    const { document } = await api<{ document: { id: string } }>("/api/documents", {
+      method: "POST",
+      json: { type: "resume", name: `${role} resume`, data: { title: role } },
+    });
+    router.push(`/dashboard/documents/${document.id}`);
+  }
 
   const shown = samples.filter((s) => {
     if (view === "saved" && !saved.has(s.id)) return false;
@@ -86,6 +104,7 @@ export default function SamplesPage() {
                     if (next.has(s.id)) next.delete(s.id);
                     else next.add(s.id);
                     setSaved(next);
+                    void api("/api/samples", { method: "POST", json: { sampleId: s.id, saved: next.has(s.id) } });
                   }}
                   className="absolute right-2 top-2 flex h-10 w-10 items-center justify-center rounded-full bg-surface/90 text-primary opacity-0 transition-opacity hover:bg-surface group-hover:opacity-100 aria-pressed:opacity-100"
                 >
@@ -100,6 +119,11 @@ export default function SamplesPage() {
                 {s.pro && (
                   <span className="rounded-lg bg-tertiary-container px-2 py-1 text-xs font-medium text-tertiary">Pro</span>
                 )}
+              </div>
+              <div className="px-4 pb-4">
+                <Button variant="tonal" icon="edit_document" className="w-full" onClick={() => startFromSample(s.role)}>
+                  Use this sample
+                </Button>
               </div>
             </article>
           ))}
