@@ -1,3 +1,10 @@
+import { Suspense } from "react";
+import Dashboard from "./dashboard";
+
 export default function DashboardPage() {
-  return <h1 className="text-[28px] text-on-surface">My Dashboard</h1>;
+  return (
+    <Suspense>
+      <Dashboard />
+    </Suspense>
+  );
 }

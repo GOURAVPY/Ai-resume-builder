@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+export const CREATE_RESUME_EVENT = "create-resume";
+
 export const navItems = [
   { href: "/dashboard", label: "My Dashboard", icon: "dashboard" },
   { href: "/dashboard/ai-agent", label: "AI Resume Agent", icon: "auto_awesome", isNew: true },
@@ -31,7 +33,13 @@ function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
       <Logo />
       <Link
         href="/dashboard?new=resume"
-        onClick={onNavigate}
+        onClick={(e) => {
+          if (pathname === "/dashboard") {
+            e.preventDefault();
+            window.dispatchEvent(new Event(CREATE_RESUME_EVENT));
+          }
+          onNavigate?.();
+        }}
         className="mx-1 mb-4 mt-8 flex h-14 items-center gap-3 rounded-2xl bg-primary-container px-4 font-medium text-on-primary-container shadow-sm transition-[border-radius,box-shadow] hover:shadow-md active:rounded-xl"
       >
         <span className="icon">note_add</span>
