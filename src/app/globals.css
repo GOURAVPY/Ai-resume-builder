@@ -53,3 +53,37 @@ body {
 .icon-filled {
   font-variation-settings: "FILL" 1;
 }
+
+/* A4-shaped page for resume and letter previews. */
+.resume-page {
+  background: white;
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 16mm;
+  box-sizing: border-box;
+}
+
+/* Download PDF uses the browser's print dialog; print only the document page. */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #print-area,
+  #print-area * {
+    visibility: visible;
+  }
+  #print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 210mm;
+  }
+  #print-area .resume-page {
+    box-shadow: none;
+    min-height: auto;
+  }
+}

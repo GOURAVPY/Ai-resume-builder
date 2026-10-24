@@ -66,3 +66,17 @@ export function emptyLetter(): LetterData {
 }
 
 export const isResume = (type: DocType) => type === "resume";
+
+// Plain-text version of a resume, used as context for AI requests.
+export function resumeText(d: ResumeData) {
+  return [
+    d.fullName,
+    d.title,
+    d.summary,
+    ...d.experience.map((e) => `${e.role} at ${e.company} (${e.start}–${e.end})\n${e.bullets}`),
+    ...d.education.map((e) => `${e.degree}, ${e.school} (${e.start}–${e.end}) ${e.details}`),
+    `Skills: ${d.skills}`,
+  ]
+    .filter((s) => s && s.trim())
+    .join("\n\n");
+}
