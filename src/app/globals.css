@@ -27,3 +27,14 @@ body {
   background: var(--color-surface);
   color: var(--color-on-surface);
 }
+
+.icon {
+  font-family: "Material Symbols Rounded";
+  font-size: 24px;
+  line-height: 1;
+  font-variation-settings: "FILL" 0;
+  user-select: none;
+}
+.icon-filled {
+  font-variation-settings: "FILL" 1;
+}
