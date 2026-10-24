@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 export const CREATE_RESUME_EVENT = "create-resume";
 
@@ -69,7 +70,46 @@ function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
           </Link>
         );
       })}
+      <AccountRow />
     </nav>
+  );
+}
+
+function AccountRow() {
+  const router = useRouter();
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    api<{ user: { name: string; email: string } }>("/api/auth/me")
+      .then((r) => setUser(r.user))
+      .catch(() => {});
+  }, []);
+
+  async function signOut() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/");
+    router.refresh();
+  }
+
+  return (
+    <div className="mt-auto flex items-center gap-3 border-t border-outline-variant px-2 pt-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary">
+        {user?.name[0]?.toUpperCase() ?? ""}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-on-surface">{user?.name ?? " "}</span>
+        <span className="block truncate text-xs text-on-surface-variant">{user?.email ?? " "}</span>
+      </span>
+      <button
+        type="button"
+        aria-label="Sign out"
+        title="Sign out"
+        onClick={signOut}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:bg-on-surface/8"
+      >
+        <span className="icon">logout</span>
+      </button>
+    </div>
   );
 }
 
