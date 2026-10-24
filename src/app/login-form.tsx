@@ -2,13 +2,52 @@
 
 import { useState } from "react";
 
-const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/15";
-
-function Icon({ d }: { d: string }) {
+// Material 3 outlined text field with a floating label.
+function TextField({
+  id,
+  label,
+  type,
+  autoComplete,
+  value,
+  onChange,
+  trailing,
+}: {
+  id: string;
+  label: string;
+  type: string;
+  autoComplete: string;
+  value: string;
+  onChange: (v: string) => void;
+  trailing?: React.ReactNode;
+}) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400">
-      <path d={d} />
+    <div className="relative">
+      <input
+        id={id}
+        type={type}
+        autoComplete={autoComplete}
+        placeholder=" "
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="peer h-14 w-full rounded-[4px] border border-outline bg-transparent px-4 pr-14 text-base text-on-surface outline-none transition-colors hover:border-on-surface focus:border-2 focus:border-primary focus:px-[15px]"
+      />
+      <label
+        htmlFor={id}
+        className="pointer-events-none absolute left-3 top-0 -translate-y-1/2 bg-surface px-1 text-xs text-on-surface-variant transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary"
+      >
+        {label}
+      </label>
+      {trailing && <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>}
+    </div>
+  );
+}
+
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" className="h-6 w-6">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      {off && <path d="M4 4l16 16" />}
     </svg>
   );
 }
@@ -35,11 +74,62 @@ export default function LoginForm() {
 
   return (
     <div>
+      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+        <TextField id="email" label="Email" type="email" autoComplete="email" value={email} onChange={setEmail} />
+        <TextField
+          id="password"
+          label="Password"
+          type={showPassword ? "text" : "password"}
+          autoComplete="current-password"
+          value={password}
+          onChange={setPassword}
+          trailing={
+            <button
+              type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((v) => !v)}
+              className="flex h-12 w-12 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-on-surface/8"
+            >
+              <EyeIcon off={showPassword} />
+            </button>
+          }
+        />
+
+        <div className="flex items-center justify-between">
+          <label className="flex cursor-pointer items-center gap-3 text-sm text-on-surface">
+            <input type="checkbox" className="h-[18px] w-[18px] accent-primary" />
+            Keep me signed in
+          </label>
+          <a href="#" className="rounded-full px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/8">
+            Forgot password?
+          </a>
+        </div>
+
+        {error && (
+          <p role="alert" className="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className="h-12 w-full rounded-full bg-primary text-sm font-medium tracking-[0.1px] text-on-primary transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 active:shadow-none"
+        >
+          Sign in
+        </button>
+      </form>
+
+      <div className="my-6 flex items-center gap-4 text-sm text-on-surface-variant">
+        <span className="h-px flex-1 bg-outline-variant" />
+        or
+        <span className="h-px flex-1 bg-outline-variant" />
+      </div>
+
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-3 font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+        className="flex h-12 w-full items-center justify-center gap-3 rounded-full border border-outline text-sm font-medium text-primary transition-colors hover:bg-primary/8"
       >
-        <svg viewBox="0 0 24 24" className="h-5 w-5">
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z" />
           <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88z" />
@@ -48,83 +138,9 @@ export default function LoginForm() {
         Continue with Google
       </button>
 
-      <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wider text-slate-400">
-        <span className="h-px flex-1 bg-slate-200" />
-        or sign in with email
-        <span className="h-px flex-1 bg-slate-200" />
-      </div>
-
-      <form onSubmit={handleSubmit} noValidate className="space-y-5">
-        <div>
-          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Email
-          </label>
-          <div className="relative">
-            <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={`${inputClass} pr-4`}
-            />
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-medium text-slate-700">
-              Password
-            </label>
-            <a href="#" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-              Forgot password?
-            </a>
-          </div>
-          <div className="relative">
-            <Icon d="M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11" />
-            <input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={`${inputClass} pr-16`}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-slate-500 hover:text-slate-800"
-            >
-              {showPassword ? "Hide" : "Show"}
-            </button>
-          </div>
-        </div>
-
-        <label className="flex items-center gap-2.5 text-sm text-slate-600">
-          <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-indigo-600" />
-          Keep me signed in
-        </label>
-
-        {error && (
-          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3 font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-indigo-500/30 active:scale-[0.99]"
-        >
-          Sign in
-        </button>
-      </form>
-
-      <p className="mt-8 text-center text-sm text-slate-500">
+      <p className="mt-8 text-center text-sm text-on-surface-variant">
         Don&apos;t have an account?{" "}
-        <a href="#" className="font-semibold text-indigo-600 hover:text-indigo-700">
+        <a href="#" className="font-medium text-primary hover:underline">
           Create one
         </a>
       </p>
