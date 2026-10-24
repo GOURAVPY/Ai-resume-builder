@@ -1,48 +1,94 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { DocPicker, fileToResume, type PickedResume } from "@/components/doc-picker";
 import { Button, Icon } from "@/components/m3";
+import { Markdown } from "@/components/markdown";
 
 const suggestions = [
-  { icon: "trending_up", text: "Improve my resume score" },
-  { icon: "my_location", text: "Target my resume to a job" },
-  { icon: "work", text: "Find a job that matches my profile" },
+  { icon: "trending_up", text: "Improve my resume and tell me what to fix first" },
+  { icon: "my_location", text: "Help me target my resume to a specific job" },
+  { icon: "work", text: "What kinds of jobs match my profile?" },
 ];
 
-type Message = { from: "user" | "agent"; text: string };
+type Message = { role: "user" | "assistant"; content: string; label?: string };
 
 export default function AiAgentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
-  const [attachment, setAttachment] = useState<string>();
+  const [attachment, setAttachment] = useState<PickedResume>();
+  const [attaching, setAttaching] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
+  const bottom = useRef<HTMLDivElement>(null);
 
-  function send(text: string) {
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages]);
+
+  async function send(text: string) {
     const body = text.trim();
-    if (!body && !attachment) return;
-    setMessages((m) => [
-      ...m,
-      { from: "user", text: attachment ? `📎 ${attachment}\n${body}` : body },
-      // TODO: replace with the real AI response once the AI backend is connected.
-      { from: "agent", text: "The AI Resume Agent isn't connected yet. Once it is, I'll answer here." },
-    ]);
+    if ((!body && !attachment) || streaming) return;
+    const content = attachment
+      ? `${body || "Please review my resume."}\n\nMy resume (${attachment.name}):\n${attachment.text}`
+      : body;
+    const next: Message[] = [
+      ...messages,
+      { role: "user", content, label: attachment ? `${body || "Please review my resume."}\n📎 ${attachment.name}` : body },
+    ];
+    setMessages([...next, { role: "assistant", content: "" }]);
     setDraft("");
     setAttachment(undefined);
+    setError("");
+    setStreaming(true);
+
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })) }),
+      });
+      if (!res.ok || !res.body) {
+        const { error: message } = await res.json().catch(() => ({ error: "The AI couldn't answer." }));
+        throw new Error(message);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let reply = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        reply += decoder.decode(value, { stream: true });
+        setMessages([...next, { role: "assistant", content: reply }]);
+      }
+    } catch (e) {
+      setMessages(next);
+      setError(e instanceof Error ? e.message : "The AI couldn't answer.");
+    } finally {
+      setStreaming(false);
+    }
+  }
+
+  async function attachFile(file: File) {
+    setAttaching(true);
+    setError("");
+    try {
+      setAttachment(await fileToResume(file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't read that file.");
+    } finally {
+      setAttaching(false);
+    }
   }
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-3xl flex-col">
       <div className="flex gap-2">
-        <Button icon="add" onClick={() => setMessages([])}>
+        <Button icon="add" disabled={streaming} onClick={() => setMessages([])}>
           New chat
         </Button>
-        <button
-          type="button"
-          aria-label="Chat history"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-outline-variant text-on-surface-variant hover:bg-on-surface/8"
-        >
-          <Icon name="history" />
-        </button>
       </div>
 
       <div className="flex flex-1 flex-col justify-center py-8">
@@ -58,26 +104,42 @@ export default function AiAgentPage() {
         ) : (
           <div className="space-y-4">
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
-                <p
-                  className={`max-w-[80%] whitespace-pre-wrap rounded-3xl px-5 py-3 text-sm ${
-                    m.from === "user"
-                      ? "rounded-br-lg bg-primary text-on-primary"
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[85%] rounded-3xl px-5 py-3 text-sm ${
+                    m.role === "user"
+                      ? "whitespace-pre-wrap rounded-br-lg bg-primary text-on-primary"
                       : "rounded-bl-lg bg-surface-container-high text-on-surface"
                   }`}
                 >
-                  {m.text}
-                </p>
+                  {m.role === "user" ? (
+                    m.label ?? m.content
+                  ) : m.content ? (
+                    <Markdown text={m.content} />
+                  ) : (
+                    <span className="flex items-center gap-2 text-on-surface-variant">
+                      <Icon name="progress_activity" className="animate-spin text-[18px]" />
+                      Thinking…
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
+            <div ref={bottom} />
           </div>
         )}
       </div>
 
+      {error && (
+        <p role="alert" className="mb-3 rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
+          {error}
+        </p>
+      )}
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          send(draft);
+          void send(draft);
         }}
         className="rounded-[28px] bg-surface-container-high p-3"
       >
@@ -88,7 +150,7 @@ export default function AiAgentPage() {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              send(draft);
+              void send(draft);
             }
           }}
           placeholder="Attach a resume, or describe your task or question…"
@@ -98,30 +160,46 @@ export default function AiAgentPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            disabled={attaching}
             onClick={() => fileInput.current?.click()}
-            className="inline-flex h-8 items-center gap-2 rounded-lg border border-outline px-3 text-sm font-medium text-on-surface-variant hover:bg-on-surface/8"
+            className="inline-flex h-8 max-w-full items-center gap-2 rounded-lg border border-outline px-3 text-sm font-medium text-on-surface-variant hover:bg-on-surface/8"
           >
-            <Icon name="upload_file" className="text-[18px]" />
-            {attachment ?? "Upload resume (PDF, DOCX)"}
+            <Icon name={attachment ? "attach_file" : "upload_file"} className="text-[18px]" />
+            <span className="truncate">{attaching ? "Reading file…" : (attachment?.name ?? "Upload resume (PDF, DOCX)")}</span>
           </button>
           <button
             type="button"
+            onClick={() => setPicking(true)}
             className="inline-flex h-8 items-center gap-2 rounded-lg border border-outline px-3 text-sm font-medium text-on-surface-variant hover:bg-on-surface/8"
           >
             <Icon name="note_add" className="text-[18px]" />
             Add resume from dashboard
           </button>
+          {attachment && (
+            <button
+              type="button"
+              aria-label="Remove attachment"
+              onClick={() => setAttachment(undefined)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-on-surface/8"
+            >
+              <Icon name="close" className="text-[18px]" />
+            </button>
+          )}
           <input
             ref={fileInput}
             type="file"
             accept=".pdf,.docx"
             hidden
-            onChange={(e) => setAttachment(e.target.files?.[0]?.name)}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void attachFile(file);
+              e.target.value = "";
+            }}
           />
           <button
             type="submit"
             aria-label="Send"
-            disabled={!draft.trim() && !attachment}
+            disabled={streaming || (!draft.trim() && !attachment)}
             className="ml-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary text-on-primary disabled:bg-on-surface/12 disabled:text-on-surface/38"
           >
             <Icon name="arrow_upward" />
@@ -143,6 +221,16 @@ export default function AiAgentPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {picking && (
+        <DocPicker
+          onClose={() => setPicking(false)}
+          onPick={(r) => {
+            setAttachment(r);
+            setPicking(false);
+          }}
+        />
       )}
     </div>
   );
