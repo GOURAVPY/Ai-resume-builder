@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 // Material 3 outlined text field with a floating label.
@@ -71,6 +72,7 @@ export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -82,6 +84,7 @@ export default function LoginForm() {
     setErrors(next);
     if (next.email || next.password) return;
     // TODO: connect to the real sign-in once the auth details are decided.
+    router.push("/dashboard");
   }
 
   return (
