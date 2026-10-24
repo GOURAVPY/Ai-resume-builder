@@ -32,10 +32,10 @@ export default function LoginPage() {
         <svg viewBox="0 0 200 200" className="absolute -right-40 -top-24 h-[34rem] w-[34rem] text-[#6c2bd9]">
           <path d={scallopPath(10, 82, 8)} fill="currentColor" />
         </svg>
-        <svg viewBox="0 0 200 200" className="absolute -bottom-28 right-24 h-[22rem] w-[22rem] text-[#4a148c]">
+        <svg viewBox="0 0 200 200" className="absolute -bottom-32 -right-24 h-[22rem] w-[22rem] text-[#4a148c]">
           <path d={scallopPath(6, 80, 12)} fill="currentColor" />
         </svg>
-        <svg viewBox="0 0 200 200" className="absolute bottom-40 -left-16 h-40 w-40 text-[#c58af9]">
+        <svg viewBox="0 0 200 200" className="absolute left-[-4.5rem] top-1/3 h-36 w-36 text-[#c58af9]">
           <path d={scallopPath(8, 80, 10)} fill="currentColor" />
         </svg>
 
