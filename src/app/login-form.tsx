@@ -11,6 +11,7 @@ function TextField({
   value,
   onChange,
   trailing,
+  error,
 }: {
   id: string;
   label: string;
@@ -19,25 +20,39 @@ function TextField({
   value: string;
   onChange: (v: string) => void;
   trailing?: React.ReactNode;
+  error?: string;
 }) {
+  const border = error
+    ? "border-error hover:border-on-error-container focus:border-error"
+    : "border-outline hover:border-on-surface focus:border-primary";
+  const labelColor = error ? "text-error peer-focus:text-error" : "text-on-surface-variant peer-focus:text-primary";
   return (
-    <div className="relative">
-      <input
-        id={id}
-        type={type}
-        autoComplete={autoComplete}
-        placeholder=" "
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="peer h-14 w-full rounded-[4px] border border-outline bg-transparent px-4 pr-14 text-base text-on-surface outline-none transition-colors hover:border-on-surface focus:border-2 focus:border-primary focus:px-[15px]"
-      />
-      <label
-        htmlFor={id}
-        className="pointer-events-none absolute left-3 top-0 -translate-y-1/2 bg-surface px-1 text-xs text-on-surface-variant transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary"
-      >
-        {label}
-      </label>
-      {trailing && <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>}
+    <div>
+      <div className="relative">
+        <input
+          id={id}
+          type={type}
+          autoComplete={autoComplete}
+          placeholder=" "
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={`peer h-14 w-full rounded-[4px] border bg-transparent px-4 pr-14 text-base text-on-surface caret-primary outline-none transition-colors focus:border-2 focus:px-[15px] ${border}`}
+        />
+        <label
+          htmlFor={id}
+          className={`pointer-events-none absolute left-3 top-0 -translate-y-1/2 bg-surface px-1 text-xs transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-0 peer-focus:text-xs ${labelColor}`}
+        >
+          {label}
+        </label>
+        {trailing && <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>}
+      </div>
+      {error && (
+        <p id={`${id}-error`} role="alert" className="px-4 pt-1 text-xs text-error">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -56,26 +71,23 @@ export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      setError("Enter a valid email address.");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    setError("");
+    const next = {
+      email: /^\S+@\S+\.\S+$/.test(email) ? undefined : "Enter a valid email address",
+      password: password.length >= 8 ? undefined : "Password must be at least 8 characters",
+    };
+    setErrors(next);
+    if (next.email || next.password) return;
     // TODO: connect to the real sign-in once the auth details are decided.
   }
 
   return (
     <div>
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
-        <TextField id="email" label="Email" type="email" autoComplete="email" value={email} onChange={setEmail} />
+        <TextField id="email" label="Email" type="email" autoComplete="email" value={email} onChange={setEmail} error={errors.email} />
         <TextField
           id="password"
           label="Password"
@@ -83,6 +95,7 @@ export default function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={setPassword}
+          error={errors.password}
           trailing={
             <button
               type="button"
@@ -104,12 +117,6 @@ export default function LoginForm() {
             Forgot password?
           </a>
         </div>
-
-        {error && (
-          <p role="alert" className="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
-            {error}
-          </p>
-        )}
 
         <button
           type="submit"
