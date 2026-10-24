@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Button, ButtonLink, Chip, Icon, Segmented, TextField } from "@/components/m3";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Button, Chip, Icon, Segmented, TextField } from "@/components/m3";
+import { api } from "@/lib/api";
 
 // Sample data with made-up companies; replace with a real jobs API later.
 const sampleJobs = [
@@ -28,6 +30,40 @@ export default function JobsPage() {
   const [selectedId, setSelectedId] = useState<string>();
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Set<string>>(new Set());
+  const router = useRouter();
+
+  useEffect(() => {
+    api<{ saved: string[]; applied: string[] }>("/api/jobs")
+      .then((r) => {
+        setSaved(new Set(r.saved));
+        setApplied(new Set(r.applied));
+      })
+      .catch(() => {});
+  }, []);
+
+  function toggleSaved(id: string) {
+    const next = !saved.has(id);
+    toggle(saved, id, setSaved);
+    void api("/api/jobs", { method: "POST", json: { jobId: id, saved: next } });
+  }
+
+  function markApplied(id: string) {
+    setApplied(new Set(applied).add(id));
+    void api("/api/jobs", { method: "POST", json: { jobId: id, status: "applied" } });
+  }
+
+  // Starts a new resume aimed at this job and opens it in the editor.
+  async function targetResume(job: Job) {
+    const { document } = await api<{ document: { id: string } }>("/api/documents", {
+      method: "POST",
+      json: {
+        type: "resume",
+        name: `Resume – ${job.title}, ${job.company}`,
+        data: { targetJob: `${job.title} at ${job.company} (${job.type}${job.remote ? ", remote" : ""})` },
+      },
+    });
+    router.push(`/dashboard/documents/${document.id}`);
+  }
 
   const words = (searched?.title ?? "").toLowerCase().split(/\s+/).filter(Boolean);
   const results = sampleJobs.filter((job) => {
@@ -149,8 +185,9 @@ export default function JobsPage() {
               location={searched?.location || "Anywhere"}
               saved={saved.has(selected.id)}
               applied={applied.has(selected.id)}
-              onSave={() => toggle(saved, selected.id, setSaved)}
-              onApply={() => setApplied(new Set(applied).add(selected.id))}
+              onSave={() => toggleSaved(selected.id)}
+              onApply={() => markApplied(selected.id)}
+              onTarget={() => targetResume(selected)}
             />
           )}
         </div>
@@ -174,6 +211,7 @@ function JobDetail({
   applied,
   onSave,
   onApply,
+  onTarget,
 }: {
   job: Job;
   location: string;
@@ -181,6 +219,7 @@ function JobDetail({
   applied: boolean;
   onSave: () => void;
   onApply: () => void;
+  onTarget: () => void;
 }) {
   return (
     <article className="rounded-3xl bg-surface-container-low p-6 lg:sticky lg:top-8 lg:self-start">
@@ -207,9 +246,9 @@ function JobDetail({
         <Button icon={applied ? "check" : "send"} disabled={applied} onClick={onApply}>
           {applied ? "Applied" : "Apply now"}
         </Button>
-        <ButtonLink href="/dashboard?new=resume" variant="outlined" icon="my_location">
+        <Button variant="outlined" icon="my_location" onClick={onTarget}>
           Target resume
-        </ButtonLink>
+        </Button>
       </div>
       <h3 className="mt-6 font-medium text-on-surface">About the role</h3>
       <p className="mt-2 text-sm leading-6 text-on-surface-variant">
