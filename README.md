@@ -20,4 +20,6 @@ Open http://localhost:3000 and create an account.
 - **AI (needs `ANTHROPIC_API_KEY`):** write/improve summaries and bullet points, write letters, AI Resume Agent chat, AI interview questions with feedback, and resume reviews. Imported resumes are split into fields by AI.
 - **Job Search and Sample Library:** sample listings; saves, applications and bookmarks are stored per account.
 
+UI work follows the rules in [AGENTS.md](AGENTS.md): build screens with shadcn/ui, Mantine and Tremor.
+
 Data is stored in a local SQLite file at `data/app.db` (not committed).
